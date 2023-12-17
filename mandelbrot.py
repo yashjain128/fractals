@@ -1,64 +1,84 @@
-
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
-x_start, y_start = -2.5 , -1.5  # an interesting region starts here
-width, height = 3, 3  # for 3 units up and right
-density_per_unit = 250  # how many pixels per unit
+from vispy import plot, scene
+from vispy.visuals.transforms import STTransform
 
-px_width = width * density_per_unit
-px_height = height * density_per_unit
+fig = plot.Fig(size=(800,800))
+fig.title = "Mandelbrot Fractal"
+
+x1, x2 = -2.5, 1
+y1, y2 = -1.5, 1.5
+width_px = 500
+height_px = 500
+
 # real and imaginary axis
-re = np.linspace(x_start, x_start + width, px_width)
-im = np.linspace(y_start, y_start + height, px_height)
+re = np.linspace(x1, x2, width_px)
+im = np.linspace(y1, y2, height_px)
 
-fig = plt.figure(figsize=(10, 10))  # instantiate a figure to draw
-ax = plt.axes()  # create an axes object
+data = np.zeros((len(im), len(re)))
 
-def mandelbrot(x, y, threshold):
-    """Calculates whether the number c = x + i*y belongs to the 
-    Mandelbrot set. In order to belong, the sequence z[i + 1] = z[i]**2 + c
-    must not diverge after 'threshold' number of steps. The sequence diverges
-    if the absolute value of z[i+1] is greater than 4.
+@fig.events.key_press.connect
+def on_key_press(event): 
+    if (event.text=='\x12'):
+        update()
+
+def update():
+    global x1, x2, y1, y2, re, im, data
+    rect = plane.camera.rect
+    y1, y2 = rect.bottom, rect.top
+    x1, x2 = rect.left, rect.right
+
+    re = np.linspace(x1, x2, width_px)
+    im = np.linspace(y1, y2, height_px)
+
+    data = np.zeros((len(im), len(re)))
+    iter(mandelbrot, data)
+    img.set_data(data)
+    plane.camera.set_range(x=[x1, x2], y=[y1, y2], margin=0.001)
+    img.transform = STTransform(scale=((x2-x1)/width_px, (y2-y1)/height_px), translate=(x1, y1))
+
+def iter(fun, arr):
+    for j, b in enumerate(im):
+        for i, a in enumerate(re):
+            arr[j][i] = fun(a, b, 100)
+
+def mandelbrot(a, b, depth):
+    # Z(n) = Z(n-1)^2 + C
+    c = complex(a, b)
+    z = complex(0., 0.)
     
-    :param float x: the x component of the initial complex number
-    :param float y: the y component of the initial complex number
-    :param int threshold: the number of iterations to considered it converged
-    """
-    # initial conditions
-    c = complex(x, y)
-    z = complex(0, 0)
-    
-    for i in range(threshold):
-        z = z**2 + c
-        if abs(z) > 4.:  # it diverged
+    for i in range(depth):
+        z = (z**2)+c
+        if abs(z) > 4.:
             return i
         
-    return threshold - 1  # it didn't diverge
-    
+    return depth - 1
 
-def iter(i):
-    ax.clear()  # clear axes object
-    ax.set_xticks([], [])  # clear x-axis ticks
-    ax.set_yticks([], [])  # clear y-axis ticks
-    
-    X = np.empty((len(re), len(im)))  # re-initialize the array-like image
-    threshold = round(1.15**(i + 1))  # calculate the current threshold
-    
-    # iterations for the current threshold
-    for i in range(len(re)):
-        for j in range(len(im)):
-            X[i, j] = mandelbrot(re[i], im[j], threshold)
-    
-    # associate colors to the iterations with an iterpolation
-    print(X)
-    img = ax.imshow(X.T, interpolation="bicubic", cmap='magma')
-    return [img]
+iter(mandelbrot, data)
 
-def animate(i):
-    return iter(30)
+# Create coordinate plane
+plane = fig[0, 0]
 
-anim = animation.FuncAnimation(fig, animate, frames=1000, interval=100, blit=True)
-plt.show()
-#anim.save('mandelbrot.gif',writer='imagemagick')
+_marr = [[4, 4] for i in range(50)]
+mark_data = np.array(_marr, dtype=np.float32)
+
+plane._configure_2d()
+
+m = plane.plot(data=mark_data, face_color="#ff0000")
+
+
+# Image that moves every time that Ctrl-R is called
+img = plane.image(data, cmap='magma')
+img.transform = STTransform(scale=((x2-x1)/width_px, (y2-y1)/height_px), translate=(x1, y1))
+# Base image to get relative position
+base_img = plane.image(data, cmap='magma')
+base_img.transform = STTransform(scale=((x2-x1)/width_px, (y2-y1)/height_px), translate=(x1, y1))
+
+
+plane.camera.set_range(x=[x1, x2], y=[y1, y2], margin=0.001)
+plane.view.bgcolor = "#000000"
+plane.xlabel = 'a'
+plane.ylabel = 'b'
+
+update()
+fig.show(run=True)
